@@ -14,6 +14,11 @@ import json
 import time
 import sys
 import requests
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
+
 
 # Configuration
 gelf_server = 'localhost'
@@ -22,28 +27,32 @@ api_key = '<api_key>'
 
 # Parse Args
 if len(sys.argv) == 1:
-    print "# Prototype of a RIPE Atlas to GELF parser"
-    print "#"
-    print "# Usage: python measurements-to-gelf.py <measurement id> <timeframe in min>"
-    print "#"
-    print "# Example: python measurements-to-gelf.py 12323 5"
-    print "#"
-    print "# Please define Server and Port inside the script and you need an API Key for Geolocation from https://geocoder.opencagedata.com/pricing"
+    print("# Prototype of a RIPE Atlas to GELF parser")
+    print("#")
+    print("# Usage: python measurements-to-gelf.py <measurement id> <timeframe in min>")
+    print("#")
+    print("# Example: python measurements-to-gelf.py 12323 5")
+    print("#")
+    print("# Please define Server and Port inside the script.")
+    print("# Get an API Key for Geolocation from https://geocoder.opencagedata.com/pricing")
     exit(1) 
 
 measurement_id = str(sys.argv[1])
-timeframe_secs = int(sys.argv[2]) * 60
+time_frame_secs = int(sys.argv[2]) * 60
+
+current_time = int(time.time())
+time_frame = current_time - time_frame_secs
 
 
-
-def getplace(lat, lon):
+# Get things done
+def get_place(lat, lon):
     url = "http://api.opencagedata.com/geocode/v1/json?q="
     url += "%s+%s&key=%s" % (lat, lon, api_key)
-    v = urlopen(url).read()
-    j = json.loads(v)
-    components = j['results'][0]['components']
-    country = town = None
-    try:
+    try:    
+        content_geo_raw = urlopen(url).read()
+        content_geo_json = json.loads(content_geo_raw)
+        components = content_geo_json['results'][0]['components']
+        country = town = None
         country = components['country']
         state = components['state']
     except Exception as e:
@@ -51,13 +60,16 @@ def getplace(lat, lon):
         state = "N/A"
     return state, country
 
+measurement_url = "https://atlas.ripe.net/api/v2/measurements/{}/results?{}".format(
+    measurement_id,
+    urlencode({
+        "start": time_frame,
+        "stop": current_time,
+        "format": "json"
+    })
+)
 
-currenttime = int(time.time())
-timeframe = currenttime - timeframe_secs
-
-measurement_url = "https://atlas.ripe.net/api/v2/measurements/%s/results?start=%s&stop=%s&format=json" % (measurement_id, str(timeframe), str(currenttime))
-
-print measurement_url
+print(measurement_url)
 
 try:
     d = requests.get(measurement_url)
@@ -69,11 +81,11 @@ data = d.json()
 
 gelf = UdpClient(gelf_server, port=gelf_port)
 for probe in data:
-    print probe['prb_id']
+    print(probe['prb_id'])
     log = {}
-    v = requests.get('https://atlas.ripe.net/api/v1/probe/' + str(probe['prb_id']) + '/')
-    details = v.json()
-    location = getplace(details['latitude'], details['longitude'])
+    content_probes_raw = requests.get('https://atlas.ripe.net/api/v1/probe/' + str(probe['prb_id']) + '/')
+    details = content_probes_raw.json()
+    location = get_place(details['latitude'], details['longitude'])
     log['short_message'] = 'RIPE Atlas Data of Probe ' + str(probe['prb_id'])
     log['host'] = 'ripe-atlas'
     log['level'] = syslog.LOG_INFO
@@ -91,6 +103,4 @@ for probe in data:
     log['_ripe_atlas_max_rtt'] = probe['max']
     log['_ripe_atlas_min_rtt'] = probe['min']
     gelf.log(log)
-
-
 

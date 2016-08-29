@@ -136,9 +136,11 @@ gelf = UdpClient(gelf_server, port=gelf_port)
 for probe in data:
     print(probe['prb_id'])
     log = {}
-    content_probes_raw = requests.get('https://atlas.ripe.net/api/v1/probe/' + str(probe['prb_id']) + '/')
+    content_probes_raw = requests.get('https://atlas.ripe.net/api/v2/probes/' + str(probe['prb_id']) + '/')
     details = content_probes_raw.json()
-    location = get_place(details['latitude'], details['longitude'], current_time)
+    longitude = details['geometry']['coordinates'][0]
+    latitude = details['geometry']['coordinates'][1]
+    location = get_place(latitude, longitude, current_time)
     log['short_message'] = 'RIPE Atlas Data of Probe ' + str(probe['prb_id'])
     log['host'] = 'ripe-atlas'
     log['level'] = syslog.LOG_INFO

@@ -11,3 +11,8 @@ Please define Server and Port inside the script and you need an API Key for Geol
 
 ### As a cronjob
 */5 * * * * /usr/bin/python measurements-to-gelf.py 12323 8
+
+## Todo:
+- Use streaming API
+- Multiple destination support
+- Multiple measurement support

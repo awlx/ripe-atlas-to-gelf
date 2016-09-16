@@ -73,7 +73,7 @@ def do_db_insert(connection, expiry, lat, lon, country, state, city):
     connection.commit()
 
 def do_db_select(cursor, lat, lon):
-    format_str = """SELECT expiry,country,state FROM geocache WHERE lat="{lat}" AND lon="{lon}";"""
+    format_str = """SELECT expiry,country,state,city FROM geocache WHERE lat="{lat}" AND lon="{lon}";"""
     sql_command = format_str.format(lat=lat, lon=lon)
     cursor.execute(sql_command)
     location = cursor.fetchone()

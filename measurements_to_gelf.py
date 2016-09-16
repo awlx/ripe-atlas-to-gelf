@@ -57,7 +57,8 @@ def do_db_check():
         lat FLOAT, 
         lon FLOAT, 
         country VARCHAR(30), 
-        state VARCHAR(30));"""
+        state VARCHAR(30),
+        city VARCHAR(30));"""
         cursor.execute(sql_command)
     else:
         connection = sqlite3.connect(db_file)
@@ -66,8 +67,8 @@ def do_db_check():
 def do_db_insert(connection, expiry, lat, lon, country, state):
     cursor = connection.cursor()
     format_str = """INSERT INTO geocache (id, expiry, lat, lon, country, state)
-    VALUES (NULL, {expiry}, {lat}, {lon}, "{country}", "{state}");"""
-    sql_command = format_str.format(expiry=expiry, lat=lat, lon=lon, country = country.encode('utf8'), state=state.encode('utf8')) 
+    VALUES (NULL, {expiry}, {lat}, {lon}, "{country}", "{state}", "{city}");"""
+    sql_command = format_str.format(expiry=expiry, lat=lat, lon=lon, country = country.encode('utf8'), state=state.encode('utf8'), city=city.encode('utf8')) 
     cursor.execute(sql_command)
     connection.commit()
 
@@ -101,17 +102,20 @@ def get_place(lat, lon, current_time):
             country = town = None
             country = components['country']
             state = components['state']
+            city = components['city']
         except Exception as e:
             country = "N/A"
             state = "N/A"
-        do_db_insert(connection, expiry, lat, lon, country, state)
+            city = "N/A"
+        do_db_insert(connection, expiry, lat, lon, country, state, city)
     else:
         expiry = location[0]
-        state = location[1]
-        country = location[2]
+        country = location[1]
+        state = location[2]
+        city = location[3]
         if expiry <= current_time:
             do_db_delete(connection, expiry)
-    return state, country
+    return country, state, city
 
 measurement_url = "https://atlas.ripe.net/api/v2/measurements/{}/results?{}".format(
     measurement_id,
@@ -153,6 +157,7 @@ for probe in data:
     log['_ripe_atlas_sent_pkts'] = probe['sent']
     log['_ripe_atlas_country'] = details['country_code']
     log['_ripe_atlas_location'] = location[0] + ',' + location[1]
+    log['_ripe_atlas_location_extended'] = location[0] + ',' + location[1] + ',' + location[2]
     log['_ripe_atlas_rcvd_pkts'] = probe['rcvd']
     log['_ripe_atlas_avg_rtt'] = probe['avg']
     log['_ripe_atlas_max_rtt'] = probe['max']

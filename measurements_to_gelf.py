@@ -64,9 +64,9 @@ def do_db_check():
         connection = sqlite3.connect(db_file)
     return connection
 
-def do_db_insert(connection, expiry, lat, lon, country, state):
+def do_db_insert(connection, expiry, lat, lon, country, state, city):
     cursor = connection.cursor()
-    format_str = """INSERT INTO geocache (id, expiry, lat, lon, country, state)
+    format_str = """INSERT INTO geocache (id, expiry, lat, lon, country, state, city)
     VALUES (NULL, {expiry}, {lat}, {lon}, "{country}", "{state}", "{city}");"""
     sql_command = format_str.format(expiry=expiry, lat=lat, lon=lon, country = country.encode('utf8'), state=state.encode('utf8'), city=city.encode('utf8')) 
     cursor.execute(sql_command)

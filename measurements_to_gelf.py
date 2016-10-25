@@ -25,7 +25,7 @@ except ImportError:
 # Configuration
 gelf_server = 'localhost'
 gelf_port = 5555
-api_key = '<api_key>'
+api_key = '<apikey>'
 db_file = 'geocache.db'
 
 # Parse Args
@@ -53,7 +53,9 @@ def do_db_check():
         sql_command = """
         CREATE TABLE geocache ( 
         id INTEGER PRIMARY KEY, 
-        expiry INTEGER,
+        probeid INTEGER,
+	country_code VARCHAR(30),
+	expiry INTEGER,
         lat FLOAT, 
         lon FLOAT, 
         country VARCHAR(30), 
@@ -64,11 +66,11 @@ def do_db_check():
         connection = sqlite3.connect(db_file)
     return connection
 
-def do_db_insert(connection, expiry, lat, lon, country, state, city):
+def do_db_insert(connection, probeid,country_code, expiry, lat, lon, country, state, city):
     cursor = connection.cursor()
-    format_str = """INSERT INTO geocache (id, expiry, lat, lon, country, state, city)
-    VALUES (NULL, {expiry}, {lat}, {lon}, "{country}", "{state}", "{city}");"""
-    sql_command = format_str.format(expiry=expiry, lat=lat, lon=lon, country = country.encode('utf8'), state=state.encode('utf8'), city=city.encode('utf8')) 
+    format_str = """INSERT INTO geocache (id, probeid,country_code, expiry, lat, lon, country, state, city)
+    VALUES (NULL, {probeid}, "{country_code}", {expiry}, {lat}, {lon}, "{country}", "{state}", "{city}");"""
+    sql_command = format_str.format(probeid=probeid,country_code=country_code.encode('utf8'), expiry=expiry, lat=lat, lon=lon, country = country.encode('utf8'), state=state.encode('utf8'), city=city.encode('utf8')) 
     cursor.execute(sql_command)
     connection.commit()
 
@@ -78,7 +80,21 @@ def do_db_select(cursor, lat, lon):
     cursor.execute(sql_command)
     location = cursor.fetchone()
     return location
-    
+
+def do_db_check_probe(cursor, probeid):
+    format_str = """SELECT probeid FROM geocache WHERE probeid={probeid};"""
+    sql_command = format_str.format(probeid=probeid)
+    cursor.execute(sql_command)
+    probe = cursor.fetchone()
+    return probe
+
+def do_db_select_geodata(cursor, probeid):
+    format_str = """SELECT lat,lon,country_code FROM geocache WHERE probeid={probeid};"""
+    sql_command = format_str.format(probeid=probeid)
+    cursor.execute(sql_command)
+    geodata = cursor.fetchone()
+    return geodata
+   
 def do_db_delete(connection, expiry):
     cursor = connection.cursor()
     format_str = """DELETE FROM geocache WHERE expiry = "{expiry}";"""
@@ -87,7 +103,7 @@ def do_db_delete(connection, expiry):
     connection.commit()
 
 # Get things done
-def get_place(lat, lon, current_time):
+def get_place(probeid, country_code, lat, lon, current_time):
     url = "http://api.opencagedata.com/geocode/v1/json?q="
     url += "%s+%s&key=%s" % (lat, lon, api_key)
     connection = do_db_check()
@@ -107,7 +123,7 @@ def get_place(lat, lon, current_time):
             country = "N/A"
             state = "N/A"
             city = "N/A"
-        do_db_insert(connection, expiry, lat, lon, country, state, city)
+        do_db_insert(connection,probeid, country_code, expiry, lat, lon, country, state, city)
     else:
         expiry = location[0]
         country = location[1]
@@ -140,11 +156,21 @@ gelf = UdpClient(gelf_server, port=gelf_port)
 for probe in data:
     print(probe['prb_id'])
     log = {}
-    content_probes_raw = requests.get('https://atlas.ripe.net/api/v2/probes/' + str(probe['prb_id']) + '/')
-    details = content_probes_raw.json()
-    longitude = details['geometry']['coordinates'][0]
-    latitude = details['geometry']['coordinates'][1]
-    location = get_place(latitude, longitude, current_time)
+    connection = do_db_check()
+    cursor = connection.cursor()
+    probeid = do_db_check_probe(cursor, probe['prb_id'])
+    if probeid is None: 
+      content_probes_raw = requests.get('https://atlas.ripe.net/api/v2/probes/' + str(probe['prb_id']) + '/')
+      details = content_probes_raw.json()
+      longitude = details['geometry']['coordinates'][0]
+      latitude = details['geometry']['coordinates'][1]
+      country_code = details['country_code']
+    else:
+      geodata = do_db_select_geodata(cursor, probe['prb_id']) 
+      longitude = geodata[0]
+      latitude = geodata[1]
+      country_code = geodata[2]
+    location = get_place(probe['prb_id'], country_code, latitude, longitude, current_time)
     log['short_message'] = 'RIPE Atlas Data of Probe ' + str(probe['prb_id'])
     log['host'] = 'ripe-atlas'
     log['level'] = syslog.LOG_INFO
@@ -155,7 +181,7 @@ for probe in data:
     log['_ripe_atlas_type'] = probe['type']
     log['_ripe_atlas_proto'] = probe['proto']
     log['_ripe_atlas_sent_pkts'] = probe['sent']
-    log['_ripe_atlas_country'] = details['country_code']
+    log['_ripe_atlas_country'] = country_code
     log['_ripe_atlas_location'] = location[0] + ',' + location[1]
     log['_ripe_atlas_location_extended'] = location[0] + ',' + location[1] + ',' + location[2]
     log['_ripe_atlas_rcvd_pkts'] = probe['rcvd']

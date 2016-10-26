@@ -170,6 +170,7 @@ for probe in data:
       longitude = geodata[0]
       latitude = geodata[1]
       country_code = geodata[2]
+    connection.close()
     location = get_place(probe['prb_id'], country_code, latitude, longitude, current_time)
     log['short_message'] = 'RIPE Atlas Data of Probe ' + str(probe['prb_id'])
     log['host'] = 'ripe-atlas'
